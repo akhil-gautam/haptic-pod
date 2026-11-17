@@ -1,0 +1,56 @@
+name: HapticPod
+options:
+  bundleIdPrefix: com.akhilgautam
+  deploymentTarget:
+    iOS: "18.0"
+  createIntermediateGroups: true
+settings:
+  base:
+    SWIFT_VERSION: "6.0"
+    DEVELOPMENT_TEAM: NCLSWS8Y8K
+    CODE_SIGN_STYLE: Automatic
+    MARKETING_VERSION: "1.0"
+    CURRENT_PROJECT_VERSION: "1"
+targets:
+  HapticPod:
+    type: application
+    platform: iOS
+    sources: [HapticPod]
+    settings:
+      base:
+        DEVELOPMENT_TEAM: NCLSWS8Y8K
+        CODE_SIGN_STYLE: Automatic
+        CODE_SIGN_IDENTITY: "Apple Development"
+        PRODUCT_BUNDLE_IDENTIFIER: com.akhilgautam.hapticpod
+        PRODUCT_NAME: HapticPod
+        TARGETED_DEVICE_FAMILY: "1"
+        ENABLE_PREVIEWS: YES
+        SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD: YES
+    info:
+      path: HapticPod/Info.plist
+      properties:
+        CFBundleDisplayName: Haptic Pod
+        UILaunchScreen:
+          UIColorName: ""
+        UIBackgroundModes: [audio]
+        UIFileSharingEnabled: true
+        LSSupportsOpeningDocumentsInPlace: true
+        UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]
+        UIRequiresFullScreen: true
+        UIStatusBarHidden: true
+        UIViewControllerBasedStatusBarAppearance: true
+        UIApplicationSceneManifest:
+          UIApplicationSupportsMultipleScenes: false
+          UISceneConfigurations:
+            UIWindowSceneSessionRoleApplication:
+              - UISceneConfigurationName: Default
+                UISceneDelegateClassName: $(PRODUCT_MODULE_NAME).SceneDelegate
+        UIUserInterfaceStyle: Light
+        ITSAppUsesNonExemptEncryption: false
+schemes:
+  HapticPod:
+    build:
+      targets:
+        HapticPod: all
+    run:
+      config: Debug
