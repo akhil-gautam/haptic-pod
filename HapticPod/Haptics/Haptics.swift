@@ -19,6 +19,8 @@ final class Haptics {
     private(set) var clickSound: Bool
 
     @ObservationIgnored private var engine: CHHapticEngine?
+    /// Texture feel for touches on the device body (metal, wheel rim, display glass).
+    @ObservationIgnored private(set) var surface: SurfaceHaptics!
     @ObservationIgnored private let sound = ClickSound()
     @ObservationIgnored private var players: [Kind: CHHapticPatternPlayer] = [:]
     @ObservationIgnored private var needsStart = true
@@ -32,6 +34,14 @@ final class Haptics {
         let stored = UserDefaults.standard.object(forKey: "hapticLevel") as? Int
         level = Level(rawValue: stored ?? Level.high.rawValue) ?? .high
         clickSound = UserDefaults.standard.bool(forKey: "clickSound")
+        surface = SurfaceHaptics(host: self)
+    }
+
+    /// The running engine, or nil when haptics are off or unsupported.
+    var liveEngine: CHHapticEngine? {
+        guard level != .off, supportsHaptics, let engine else { return nil }
+        if needsStart { start() }
+        return engine
     }
 
     func prepare() {
@@ -53,6 +63,7 @@ final class Haptics {
     }
 
     func stop() {
+        surface.ended()
         engine?.stop()
         needsStart = true
     }
@@ -61,6 +72,7 @@ final class Haptics {
         level = Level(rawValue: (level.rawValue + 1) % Level.allCases.count) ?? .high
         UserDefaults.standard.set(level.rawValue, forKey: "hapticLevel")
         rebuildPlayers()
+        surface.reset()
     }
 
     func toggleClickSound() {
@@ -103,6 +115,7 @@ final class Haptics {
 
     private func handleReset() {
         needsStart = true
+        surface.reset()
         rebuildPlayers()
         start()
     }

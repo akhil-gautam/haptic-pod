@@ -5,6 +5,7 @@ import UniformTypeIdentifiers
 struct DeviceView: View {
     @Environment(Navigator.self) private var nav
     @Environment(LibraryStore.self) private var library
+    @Environment(Haptics.self) private var haptics
 
     var body: some View {
         @Bindable var nav = nav
@@ -53,11 +54,37 @@ struct DeviceView: View {
 
             ZStack {
                 MetalSurface()
+                surfaceTouch(wheelCenter: CGPoint(x: W / 2, y: (H - displayH) / 2 - 6), wheelRadius: wheelD / 2)
                 WheelView(diameter: wheelD)
                     .offset(y: -6)
             }
             .frame(width: W, height: H - displayH)
         }
         .frame(width: W, height: H)
+        // Watches every touch (alongside the display rows and the wheel) for the display seam bump.
+        .simultaneousGesture(
+            DragGesture(minimumDistance: 0, coordinateSpace: .local)
+                .onChanged { haptics.surface.trackSeam(y: $0.location.y, seamY: displayH) }
+                .onEnded { _ in haptics.surface.endSeam() }
+        )
+    }
+
+    /// Touch layer under the wheel: lets a finger feel the metal body. Touches that start on the
+    /// wheel belong to the wheel; a finger slid onto it from the metal feels its rim and surface.
+    private func surfaceTouch(wheelCenter: CGPoint, wheelRadius: CGFloat) -> some View {
+        Color.clear
+            .contentShape(Rectangle())
+            .gesture(
+                DragGesture(minimumDistance: 0, coordinateSpace: .local)
+                    .onChanged { value in
+                        let p = value.location
+                        let material: SurfaceHaptics.Material =
+                            p.y < 0 ? .glass
+                            : hypot(p.x - wheelCenter.x, p.y - wheelCenter.y) < wheelRadius ? .wheel
+                            : .metal
+                        haptics.surface.track(p, on: material)
+                    }
+                    .onEnded { _ in haptics.surface.ended() }
+            )
     }
 }

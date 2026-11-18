@@ -4,9 +4,17 @@ import UIKit
 /// Procedural brushed-aluminium grain: horizontal fibres + fine per-pixel noise, neutral at 50% grey
 /// so it can be laid over a gradient with `.overlay` blending.
 enum MetalTexture {
-    static let image: UIImage = make(width: 900, height: 520, scale: 2)
+    private static let built = make(width: 900, height: 520, scale: 2)
+    static var image: UIImage { built.image }
+    /// Brushing-streak strength of each texture row (-1...1). The surface haptics place their
+    /// grooves on the strongest rows, so what you feel lines up with the streaks you see.
+    static var rows: [Float] { built.rows }
+    /// Tile height in points (texture rows / scale).
+    static let tileHeight: CGFloat = 260
+    static let rowsPerPoint = 2
 
-    static func make(width: Int, height: Int, scale: CGFloat) -> UIImage {
+    static func make(width: Int, height: Int, scale: CGFloat) -> (image: UIImage, rows: [Float]) {
+        var rows = [Float](repeating: 0, count: height)
         var pixels = [UInt8](repeating: 128, count: width * height)
         var state: UInt64 = 0x9E37_79B9_7F4A_7C15
         @inline(__always) func rand() -> Float {   // xorshift, -1...1
@@ -17,6 +25,7 @@ enum MetalTexture {
         }
         for y in 0..<height {
             let row = rand() * 0.6 + rand() * 0.4      // per-row brushing streak
+            rows[y] = row
             var fibre = rand() * 0.3
             let base = y * width
             for x in 0..<width {
@@ -34,8 +43,8 @@ enum MetalTexture {
                 bitmapInfo: CGBitmapInfo(rawValue: CGImageAlphaInfo.none.rawValue),
                 provider: provider, decode: nil, shouldInterpolate: false, intent: .defaultIntent
               )
-        else { return UIImage() }
-        return UIImage(cgImage: cg, scale: scale, orientation: .up)
+        else { return (UIImage(), rows) }
+        return (UIImage(cgImage: cg, scale: scale, orientation: .up), rows)
     }
 }
 
