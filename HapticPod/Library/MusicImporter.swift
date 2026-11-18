@@ -2,6 +2,7 @@ import Foundation
 
 /// Copies picked files/folders (e.g. from Google Drive in the Files app) into Documents/Music.
 enum MusicImporter {
+    /// Returns how many files were newly copied (files already present are skipped).
     static func importItems(_ urls: [URL]) async -> Int {
         try? FileManager.default.createDirectory(at: Paths.music, withIntermediateDirectories: true)
         var count = 0
@@ -16,6 +17,7 @@ enum MusicImporter {
         let isDir = (try? url.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) ?? false
         guard isDir else {
             return copyCoordinated(url, into: Paths.music) ? 1 : 0
+
         }
 
         let dest = Paths.music.appending(path: url.lastPathComponent, directoryHint: .isDirectory)
@@ -35,8 +37,21 @@ enum MusicImporter {
         return count
     }
 
+    /// True when `dir` already holds a file with this name and size. Uses the provider's metadata,
+    /// so an already-imported cloud file isn't downloaded again just to compare it.
+    private static func alreadyImported(_ src: URL, in dir: URL) -> Bool {
+        let keys: Set<URLResourceKey> = [.fileSizeKey, .totalFileSizeKey]
+        let values = try? src.resourceValues(forKeys: keys)
+        guard let srcSize = values?.fileSize ?? values?.totalFileSize else { return false }
+        let target = dir.appending(path: src.lastPathComponent)
+        let existing = (try? target.resourceValues(forKeys: [.fileSizeKey]))?.fileSize
+        return existing == srcSize
+    }
+
     /// Coordinated read makes the file provider download the file if it's only a placeholder.
+    /// Returns true only when a new file was written.
     private static func copyCoordinated(_ src: URL, into dir: URL) -> Bool {
+        if alreadyImported(src, in: dir) { return false }
         var ok = false
         var coordError: NSError?
         NSFileCoordinator().coordinate(readingItemAt: src, options: [.withoutChanges], error: &coordError) { readURL in
@@ -46,7 +61,7 @@ enum MusicImporter {
             var target = dir.appending(path: name)
             if fm.fileExists(atPath: target.path(percentEncoded: false)) {
                 let existingSize = (try? target.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? -2
-                if existingSize == srcSize { ok = true; return }
+                if existingSize == srcSize { return }
                 let base = src.deletingPathExtension().lastPathComponent
                 let ext = src.pathExtension
                 var n = 2

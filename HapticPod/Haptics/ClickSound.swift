@@ -30,7 +30,14 @@ final class ClickSound {
         }
         if engine.isRunning { return true }
         do {
-            try AVAudioSession.sharedInstance().setActive(true)
+            let session = AVAudioSession.sharedInstance()
+            // Another app is playing (and ours isn't, or it would have interrupted that app):
+            // mix the clicks in rather than stopping it. Our own playback switches back to a
+            // non-mixing session when it starts.
+            if session.isOtherAudioPlaying {
+                try? session.setCategory(.playback, mode: .default, options: [.mixWithOthers])
+            }
+            try session.setActive(true)
             engine.prepare()
             try engine.start()
             return true

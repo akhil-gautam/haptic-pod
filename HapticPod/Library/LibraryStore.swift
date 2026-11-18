@@ -4,9 +4,14 @@ import Observation
 @MainActor @Observable
 final class LibraryStore {
     static let recentlyAdded = "Recently Added"
+    static let mostPlayed = "Most Played"
 
     private(set) var tracks: [Track] = []
     private(set) var isScanning = false
+    private(set) var isSyncing = false
+    private(set) var syncFolderName: String? = FolderSync.folderName
+    /// New songs copied by the last folder sync (nil until one has run).
+    private(set) var lastSyncAdded: Int?
 
     private(set) var allSongs: [Track] = []
     private(set) var artistGroups: [GroupInfo] = []
@@ -15,6 +20,8 @@ final class LibraryStore {
     @ObservationIgnored private var byArtist: [String: [Track]] = [:]
     @ObservationIgnored private var byAlbum: [String: [Track]] = [:]
     @ObservationIgnored private var byPlaylist: [String: [Track]] = [:]
+    @ObservationIgnored private var playCounts: [String: Int] =
+        (UserDefaults.standard.dictionary(forKey: "playCounts") as? [String: Int]) ?? [:]
 
     func load() {
         try? FileManager.default.createDirectory(at: Paths.music, withIntermediateDirectories: true)
@@ -22,6 +29,24 @@ final class LibraryStore {
            let saved = try? JSONDecoder().decode([Track].self, from: data) {
             setTracks(saved)
         }
+    }
+
+    /// Pulls new songs from the sync folder (if one is set), then rescans the library.
+    func refresh() async {
+        if syncFolderName != nil, !isSyncing {
+            isSyncing = true
+            lastSyncAdded = await FolderSync.sync()
+            isSyncing = false
+        }
+        await rescan()
+    }
+
+    /// Remembers a newly picked sync folder and syncs it straight away.
+    func setSyncFolder(_ url: URL) async {
+        guard FolderSync.remember(url) else { return }
+        syncFolderName = FolderSync.folderName
+        lastSyncAdded = nil
+        await refresh()
     }
 
     func rescan() async {
@@ -84,7 +109,29 @@ final class LibraryStore {
                              count: list.count, artworkKey: firstArt(list))
         }
 
+        buildPlaylists()
+    }
+
+    /// Counts a listen and refreshes the Most Played playlist.
+    func recordPlay(_ id: String) {
+        playCounts[id, default: 0] += 1
+        UserDefaults.standard.set(playCounts, forKey: "playCounts")
+        buildPlaylists()
+    }
+
+    /// Recently Added, Most Played, then one playlist per folder.
+    private func buildPlaylists() {
+        let new = tracks
+        let lsc: (String, String) -> Bool = { $0.localizedStandardCompare($1) == .orderedAscending }
+        let fileOrder: (Track, Track) -> Bool = { lsc($0.id, $1.id) }
         var playlists: [String: [Track]] = [:]
+        let played = new.filter { (playCounts[$0.id] ?? 0) > 0 }
+        if !played.isEmpty {
+            playlists[Self.mostPlayed] = Array(played.sorted {
+                let a = playCounts[$0.id] ?? 0, b = playCounts[$1.id] ?? 0
+                return a == b ? lsc($0.title, $1.title) : a > b
+            }.prefix(25))
+        }
         if !new.isEmpty {
             playlists[Self.recentlyAdded] = Array(
                 new.sorted { $0.added == $1.added ? fileOrder($0, $1) : $0.added > $1.added }.prefix(50)
@@ -94,8 +141,9 @@ final class LibraryStore {
             playlists[folder] = list.sorted(by: fileOrder)
         }
         byPlaylist = playlists
-        let folderNames = playlists.keys.filter { $0 != Self.recentlyAdded }.sorted(by: lsc)
-        let names = (playlists[Self.recentlyAdded] != nil ? [Self.recentlyAdded] : []) + folderNames
+        let smart = [Self.recentlyAdded, Self.mostPlayed]
+        let folderNames = playlists.keys.filter { !smart.contains($0) }.sorted(by: lsc)
+        let names = smart.filter { playlists[$0] != nil } + folderNames
         playlistGroups = names.map { name in
             let list = playlists[name] ?? []
             return GroupInfo(kind: .playlist, name: name, subtitle: "\(list.count) SONGS",

@@ -18,14 +18,22 @@ struct DeviceView: View {
         .background(Theme.screen.ignoresSafeArea())
         .fileImporter(
             isPresented: $nav.showImporter,
-            allowedContentTypes: [.audio, .folder] + [UTType("org.xiph.flac")].compactMap { $0 },
-            allowsMultipleSelection: true
+            allowedContentTypes: nav.importerMode == .syncFolder
+                ? [.folder]
+                : [.audio, .folder] + [UTType("org.xiph.flac")].compactMap { $0 },
+            allowsMultipleSelection: nav.importerMode == .music
         ) { result in
             guard case .success(let urls) = result else { return }
-            Task {
-                let count = await MusicImporter.importItems(urls)
-                nav.importFinished(count: count)
-                await library.rescan()
+            switch nav.importerMode {
+            case .syncFolder:
+                guard let folder = urls.first else { return }
+                Task { await library.setSyncFolder(folder) }
+            case .music:
+                Task {
+                    let count = await MusicImporter.importItems(urls)
+                    nav.importFinished(count: count)
+                    await library.rescan()
+                }
             }
         }
     }

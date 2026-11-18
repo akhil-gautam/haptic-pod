@@ -17,7 +17,7 @@ struct NavFrame: Equatable {
 }
 
 enum MenuItem: CaseIterable {
-    case playlists, artists, albums, songs, settings, nowPlaying
+    case playlists, artists, albums, songs, shuffleSongs, settings, nowPlaying
 
     var title: String {
         switch self {
@@ -25,6 +25,7 @@ enum MenuItem: CaseIterable {
         case .artists: "ARTISTS"
         case .albums: "ALBUMS"
         case .songs: "SONGS"
+        case .shuffleSongs: "SHUFFLE SONGS"
         case .settings: "SETTINGS"
         case .nowPlaying: "NOW PLAYING"
         }
@@ -32,7 +33,7 @@ enum MenuItem: CaseIterable {
 }
 
 enum SettingItem: CaseIterable {
-    case haptics, clickSound, shuffle, repeatAll, importMusic, rescan, about
+    case haptics, clickSound, shuffle, repeatAll, equalizer, syncFolder, importMusic, rescan, about
 
     var title: String {
         switch self {
@@ -40,8 +41,10 @@ enum SettingItem: CaseIterable {
         case .clickSound: "CLICK SOUND"
         case .shuffle: "SHUFFLE"
         case .repeatAll: "REPEAT"
+        case .equalizer: "EQUALIZER"
+        case .syncFolder: "SYNC FOLDER"
         case .importMusic: "IMPORT MUSIC"
-        case .rescan: "RESCAN LIBRARY"
+        case .rescan: "SYNC & RESCAN"
         case .about: "ABOUT"
         }
     }

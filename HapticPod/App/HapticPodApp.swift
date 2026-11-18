@@ -14,6 +14,8 @@ final class AppServices {
     private init() {
         nav = Navigator(library: library, player: player, haptics: haptics)
         library.load()
+        player.onPlayCounted = { [weak library] id in library?.recordPlay(id) }
+        player.restoreState(library: library.tracks)
     }
 }
 
@@ -97,10 +99,15 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
     func sceneDidBecomeActive(_ scene: UIScene) {
         let services = AppServices.shared
         services.haptics.start()
-        Task { await services.library.rescan() }
+        Task {
+            await services.library.refresh()
+            // First launch after a fresh install has no saved index, so restore once tracks exist.
+            services.player.restoreState(library: services.library.tracks)
+        }
     }
 
     func sceneDidEnterBackground(_ scene: UIScene) {
+        AppServices.shared.player.saveState()
         AppServices.shared.haptics.stop()
     }
 }

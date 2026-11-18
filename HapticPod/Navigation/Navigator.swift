@@ -4,7 +4,9 @@ import Observation
 @MainActor @Observable
 final class Navigator {
     private(set) var stack: [NavFrame] = [NavFrame(screen: .home)]
+    enum ImporterMode { case music, syncFolder }
     var showImporter = false
+    private(set) var importerMode: ImporterMode = .music
     private(set) var scrubTarget: Double?
     private(set) var importStatus: String?
     @ObservationIgnored var visibleRows = 7
@@ -99,6 +101,10 @@ final class Navigator {
             case .artists: push(.artists)
             case .albums: push(.albums)
             case .songs: push(.songs)
+            case .shuffleSongs:
+                guard !library.allSongs.isEmpty else { return false }
+                player.shuffleAll(library.allSongs)
+                push(.nowPlaying)
             case .settings: push(.settings)
             case .nowPlaying:
                 guard player.current != nil else { return false }
@@ -148,14 +154,24 @@ final class Navigator {
         case .clickSound: haptics.clickSound ? "ON" : "OFF"
         case .shuffle: player.shuffle ? "ON" : "OFF"
         case .repeatAll: player.repeatAll ? "ALL" : "OFF"
+        case .equalizer: player.eqPreset.label
+        case .syncFolder:
+            if library.isSyncing { "SYNCING" }
+            else if let name = library.syncFolderName {
+                (library.lastSyncAdded.map { $0 > 0 ? "+\($0) · " : "" } ?? "") + Self.short(name.uppercased())
+            } else { "CHOOSE" }
         case .importMusic: importStatus ?? "FILES"
-        case .rescan: library.isScanning ? "SCANNING" : ""
+        case .rescan: library.isSyncing || library.isScanning ? "WORKING" : ""
         case .about: "\(library.tracks.count) SONGS"
         }
     }
 
     func importFinished(count: Int) {
         importStatus = "+\(count)"
+    }
+
+    private static func short(_ s: String, max: Int = 14) -> String {
+        s.count > max ? String(s.prefix(max - 1)) + "…" : s
     }
 
     private func push(_ s: Screen) {
@@ -169,8 +185,10 @@ final class Navigator {
         case .clickSound: haptics.toggleClickSound()
         case .shuffle: player.toggleShuffle()
         case .repeatAll: player.toggleRepeat()
-        case .importMusic: importStatus = nil; showImporter = true
-        case .rescan: Task { await library.rescan() }
+        case .equalizer: player.cycleEQ()
+        case .syncFolder: importerMode = .syncFolder; showImporter = true
+        case .importMusic: importStatus = nil; importerMode = .music; showImporter = true
+        case .rescan: Task { await library.refresh() }
         case .about: break
         }
     }
