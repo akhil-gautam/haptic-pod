@@ -33,19 +33,20 @@ struct WheelView: View {
 
     var body: some View {
         let d = diameter
+        let colors = nav.finish.wheel
         ZStack {
             Circle()
-                .fill(RadialGradient(colors: [Theme.wheelCenter, Theme.wheelEdge],
+                .fill(RadialGradient(colors: [colors.center, colors.edge],
                                      center: .center, startRadius: 0, endRadius: d / 2))
-                .overlay(Circle().stroke(Color.black, lineWidth: 1))
+                .overlay(Circle().stroke(colors.rim, lineWidth: 1))
                 .shadow(color: .black.opacity(0.25), radius: 6, y: 3)
 
             labels(d)
 
             Circle()
-                .fill(LinearGradient(colors: [Theme.buttonTop, Theme.buttonBottom],
+                .fill(LinearGradient(colors: [colors.buttonTop, colors.buttonBottom],
                                      startPoint: .top, endPoint: .bottom))
-                .overlay(Circle().stroke(Theme.buttonStroke, lineWidth: 1))
+                .overlay(Circle().stroke(colors.buttonStroke, lineWidth: 1))
                 .frame(width: d * Theme.centerButtonRatio, height: d * Theme.centerButtonRatio)
                 .brightness(pressed == .center ? -0.04 : 0)
                 .scaleEffect(pressed == .center ? 0.97 : 1)
@@ -81,7 +82,7 @@ struct WheelView: View {
                 .offset(y: r)
                 .opacity(pressed == .bottom ? 0.6 : 1)
         }
-        .foregroundStyle(Theme.wheelLabel)
+        .foregroundStyle(nav.finish.wheel.label)
         .allowsHitTesting(false)
     }
 
@@ -121,13 +122,27 @@ struct WheelView: View {
 
     private func rotate(_ steps: Int) {
         let t = tracker
-        let longList = nav.screen == .nowPlaying || nav.currentCount > 40
-        let mult = longList ? t.model.multiplier : 1
         let dir = steps > 0 ? 1 : -1
+        // The safe dial plays its own haptics, one number per detent.
+        if nav.screen == .game {
+            for _ in 0..<abs(steps) { nav.game.turn(dir) }
+            return
+        }
+        let scrubbing = nav.screen == .nowPlaying && nav.nowPlayingWheel == .scrub
+        let longList = scrubbing || (nav.screen != .nowPlaying && nav.currentCount > 40)
+        let mult = longList ? t.model.multiplier : 1
+        // Long alphabetical lists: a heavier notch when the index letter changes.
+        let lettered = nav.isAlphabetical && nav.currentCount > 25
         for _ in 0..<abs(steps) {
+            let before = lettered ? nav.selectionLetter : nil
             if nav.wheel(delta: dir * mult) {
                 t.atBoundary = false
-                haptics.play(t.model.isFast ? .tickSoft : .tick)
+                if lettered, nav.selectionLetter != before {
+                    haptics.play(.letter)
+                } else {
+                    haptics.play(t.model.isFast ? .tickSoft : .tick)
+                }
+                if nav.isAlphabetical, t.model.isFast { nav.flashLetter() }
             } else if !t.atBoundary {
                 t.atBoundary = true
                 haptics.play(.thud)

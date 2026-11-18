@@ -21,7 +21,18 @@ struct DisplayView: View {
                         insertion: .opacity.combined(with: .offset(x: 18)),
                         removal: .opacity
                     ))
+                if let letter = nav.scrollLetter {
+                    Text(letter)
+                        .font(Theme.font(54, .bold))
+                        .foregroundStyle(Theme.primary)
+                        .frame(width: 104, height: 104)
+                        .background(RoundedRectangle(cornerRadius: 16).fill(Color(hex: 0x1C1C1E).opacity(0.94)))
+                        .overlay(RoundedRectangle(cornerRadius: 16).stroke(Theme.track, lineWidth: 1))
+                        .transition(.opacity)
+                        .allowsHitTesting(false)
+                }
             }
+            .animation(.easeOut(duration: 0.12), value: nav.scrollLetter)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .clipped()
         }
@@ -42,6 +53,8 @@ struct DisplayView: View {
         case .settings: SettingsView(frame: frame)
         case .playlist(let n), .artist(let n), .album(let n): DetailListView(frame: frame, title: n)
         case .playlists, .artists, .albums, .songs: ListScreenView(frame: frame)
+        case .extras: ExtrasView(frame: frame)
+        case .game: SafeGameView()
         }
     }
 }

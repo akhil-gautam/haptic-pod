@@ -17,6 +17,8 @@ struct DeviceView: View {
             .ignoresSafeArea()
         }
         .background(Theme.screen.ignoresSafeArea())
+        // Lets the wheel set system volume (and hides iOS's own volume HUD).
+        .background(alignment: .topLeading) { SystemVolumeHost().frame(width: 40, height: 20) }
         .fileImporter(
             isPresented: $nav.showImporter,
             allowedContentTypes: nav.importerMode == .syncFolder

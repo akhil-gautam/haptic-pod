@@ -55,3 +55,63 @@ enum Theme {
         .system(size: size, weight: weight)
     }
 }
+
+/// Colours of the click wheel and its centre button.
+struct WheelColors {
+    var center, edge, buttonTop, buttonBottom, buttonStroke, label, rim: Color
+}
+
+/// Body editions. Each one recolours the body, retunes how strongly the brushed grain and the sheen
+/// show on that colour, and picks a matching wheel.
+enum BodyFinish: Int, CaseIterable {
+    case silver, graphite, gold, blue, red
+
+    var label: String { ["SILVER", "GRAPHITE", "GOLD", "BLUE", "RED"][rawValue] }
+    var next: BodyFinish { BodyFinish(rawValue: (rawValue + 1) % Self.allCases.count) ?? .silver }
+
+    /// Top, middle and bottom of the body gradient.
+    var body: (top: Color, mid: Color, bottom: Color) {
+        switch self {
+        case .silver: (Theme.bodyTop, Theme.bodyMid, Theme.bodyBottom)
+        case .graphite: (Color(hex: 0x5A5B5F), Color(hex: 0x3E3F43), Color(hex: 0x29292C))
+        case .gold: (Color(hex: 0xE9DABF), Color(hex: 0xD3BD99), Color(hex: 0xB39B75))
+        case .blue: (Color(hex: 0x74A4DA), Color(hex: 0x4C7FBF), Color(hex: 0x33609C))
+        case .red: (Color(hex: 0xDA5860), Color(hex: 0xB8323C), Color(hex: 0x8C222B))
+        }
+    }
+
+    /// Opacity of the brushed-grain overlay; dark anodising needs more to show the brushing.
+    var grain: Double {
+        switch self {
+        case .silver: 0.75
+        case .graphite: 0.95
+        case .gold: 0.65
+        case .blue, .red: 0.8
+        }
+    }
+
+    var sheen: Double {
+        switch self {
+        case .silver, .gold: 0.45
+        case .graphite: 0.22
+        case .blue, .red: 0.35
+        }
+    }
+
+    var wheel: WheelColors {
+        switch self {
+        case .silver:
+            WheelColors(center: Theme.wheelCenter, edge: Theme.wheelEdge, buttonTop: Theme.buttonTop,
+                        buttonBottom: Theme.buttonBottom, buttonStroke: Theme.buttonStroke,
+                        label: Theme.wheelLabel, rim: .black)
+        case .graphite:
+            WheelColors(center: Color(hex: 0x1B1B1D), edge: Color(hex: 0x0B0B0C), buttonTop: Color(hex: 0x2B2B2E),
+                        buttonBottom: Color(hex: 0x161618), buttonStroke: Color(hex: 0x37373A),
+                        label: Color(hex: 0x9C9CA1), rim: .black)
+        case .gold, .blue, .red:
+            WheelColors(center: Color(hex: 0xFAFAF8), edge: Color(hex: 0xE2E2DE), buttonTop: Color(hex: 0xFFFFFF),
+                        buttonBottom: Color(hex: 0xE8E8E4), buttonStroke: Color(hex: 0xD0D0CB),
+                        label: Color(hex: 0x8A8A8F), rim: Color.black.opacity(0.28))
+        }
+    }
+}

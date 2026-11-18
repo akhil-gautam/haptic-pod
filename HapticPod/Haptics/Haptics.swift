@@ -7,7 +7,8 @@ import UIKit
 final class Haptics {
     /// tick/tickSoft: wheel detents. pressDown/pressUp: centre button travel.
     /// click: a full press+release for the ring buttons. home: back. thud: end stop / no-op.
-    enum Kind: CaseIterable { case tick, tickSoft, pressDown, pressUp, click, home, thud, double }
+    /// letter: crossing into a new index letter while scrolling a long alphabetical list.
+    enum Kind: CaseIterable { case tick, tickSoft, letter, pressDown, pressUp, click, home, thud, double }
 
     enum Level: Int, CaseIterable {
         case off, low, medium, high
@@ -23,6 +24,8 @@ final class Haptics {
     @ObservationIgnored private(set) var surface: SurfaceHaptics!
     @ObservationIgnored private let sound = ClickSound()
     @ObservationIgnored private var players: [Kind: CHHapticPatternPlayer] = [:]
+    /// One-off pulse players, kept alive until they have played.
+    @ObservationIgnored private var pulses: [CHHapticPatternPlayer] = []
     @ObservationIgnored private var needsStart = true
     @ObservationIgnored private var lastTick: CFTimeInterval = 0
     @ObservationIgnored private let supportsHaptics = CHHapticEngine.capabilitiesForHardware().supportsHaptics
@@ -91,6 +94,7 @@ final class Haptics {
             switch kind {
             case .tick: sound.play(.tick)
             case .tickSoft: sound.play(.tickSoft)
+            case .letter: sound.play(.press)
             case .pressDown: sound.play(.press)
             case .pressUp: sound.play(.release)
             case .click, .double: sound.play(.click)
@@ -107,6 +111,24 @@ final class Haptics {
             needsStart = true
             fallback(kind)
         }
+    }
+
+    /// A single transient at an exact strength and sharpness (both 0...1, before the user's level).
+    /// Always sounds like a plain tick, so only touch tells pulses apart.
+    func pulse(_ intensity: Float, sharpness: Float) {
+        if clickSound { sound.play(.tick) }
+        guard level != .off else { return }
+        guard supportsHaptics, let engine else { selectionGen.selectionChanged(); return }
+        if needsStart { start() }
+        let event = CHHapticEvent(eventType: .hapticTransient, parameters: [
+            CHHapticEventParameter(parameterID: .hapticIntensity, value: min(1, intensity * level.scale)),
+            CHHapticEventParameter(parameterID: .hapticSharpness, value: sharpness),
+        ], relativeTime: 0)
+        guard let pattern = try? CHHapticPattern(events: [event], parameters: []),
+              let player = try? engine.makePlayer(with: pattern) else { return }
+        try? player.start(atTime: CHHapticTimeImmediate)
+        pulses.append(player)
+        if pulses.count > 8 { pulses.removeFirst(pulses.count - 8) }
     }
 
     // MARK: Private
@@ -160,6 +182,8 @@ final class Haptics {
         // Detents: tiny, glassy, maximum sharpness so fast scrolling reads as a ratchet.
         case .tick: events = [event(0.62, 1.0)]
         case .tickSoft: events = [event(0.42, 1.0)]
+        // New index letter: a heavier, rounder notch with a short settle.
+        case .letter: events = [event(1.0, 0.5), event(0.3, 0.85, at: 0.03)]
         // Centre button: firm bottom-out on press, faint snap on release.
         case .pressDown: events = [event(1.0, 0.72)]
         case .pressUp: events = [event(0.36, 0.9)]
@@ -179,6 +203,7 @@ final class Haptics {
         let s = CGFloat(level.scale)
         switch kind {
         case .tick, .tickSoft: selectionGen.selectionChanged()
+        case .letter: rigidGen.impactOccurred(intensity: s)
         case .pressDown, .pressUp, .click, .double: rigidGen.impactOccurred(intensity: s)
         case .home, .thud: heavyGen.impactOccurred(intensity: s)
         }

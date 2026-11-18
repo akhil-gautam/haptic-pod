@@ -11,6 +11,22 @@ final class Navigator {
     private(set) var importStatus: String?
     @ObservationIgnored var visibleRows = 7
 
+    /// What the wheel does on Now Playing: system volume by default; a centre press switches to
+    /// scrubbing, which falls back to volume after a few idle seconds.
+    enum NowPlayingWheel { case volume, scrub }
+    private(set) var nowPlayingWheel: NowPlayingWheel = .volume
+    /// True briefly after the wheel changes volume, so Now Playing shows the volume bar.
+    private(set) var showingVolume = false
+    @ObservationIgnored private var scrubIdleTask: Task<Void, Never>?
+    @ObservationIgnored private var volumeTask: Task<Void, Never>?
+
+    /// Big index letter shown while spinning fast through an alphabetical list.
+    private(set) var scrollLetter: String?
+    @ObservationIgnored private var letterTask: Task<Void, Never>?
+
+    private(set) var finish: BodyFinish
+    let game: SafeGame
+
     let library: LibraryStore
     let player: PlayerService
     let haptics: Haptics
@@ -19,12 +35,18 @@ final class Navigator {
         self.library = library
         self.player = player
         self.haptics = haptics
+        finish = BodyFinish(rawValue: UserDefaults.standard.integer(forKey: "bodyFinish")) ?? .silver
+        game = SafeGame(haptics: haptics)
         #if DEBUG
-        // Launch with `-screen songs|playlists|artists|albums|settings|nowPlaying` to jump straight in.
+        // Launch with `-screen songs|playlists|artists|albums|settings|nowPlaying|extras|game`.
         if let s = UserDefaults.standard.string(forKey: "screen") {
             let map: [String: Screen] = ["songs": .songs, "playlists": .playlists, "artists": .artists,
-                                         "albums": .albums, "settings": .settings, "nowPlaying": .nowPlaying]
-            if let screen = map[s] { stack.append(NavFrame(screen: screen)) }
+                                         "albums": .albums, "settings": .settings, "nowPlaying": .nowPlaying,
+                                         "extras": .extras, "game": .game]
+            if let screen = map[s] {
+                stack.append(NavFrame(screen: screen))
+                if screen == .game { game.newGame() }
+            }
         }
         #endif
     }
@@ -44,7 +66,44 @@ final class Navigator {
         case .artist(let n): .tracks(library.artistTracks(n))
         case .album(let n): .tracks(library.albumTracks(n))
         case .settings: .settings(SettingItem.allCases)
-        case .nowPlaying: .none
+        case .extras: .extras(ExtraItem.allCases)
+        case .nowPlaying, .game: .none
+        }
+    }
+
+    // MARK: Index letters
+
+    var isAlphabetical: Bool {
+        switch screen {
+        case .songs, .artists, .albums: true
+        default: false
+        }
+    }
+
+    /// Index letter of the selected row on Songs / Artists / Albums.
+    var selectionLetter: String? {
+        guard isAlphabetical else { return nil }
+        let name: String? = switch content(for: screen) {
+        case .tracks(let t): t.indices.contains(frame.selection) ? t[frame.selection].title : nil
+        case .groups(let g): g.indices.contains(frame.selection) ? g[frame.selection].name : nil
+        default: nil
+        }
+        return name.map(Self.indexLetter)
+    }
+
+    static func indexLetter(_ s: String) -> String {
+        let folded = s.folding(options: [.diacriticInsensitive, .caseInsensitive], locale: nil).uppercased()
+        guard let c = folded.first(where: { !$0.isWhitespace }), c.isLetter else { return "#" }
+        return String(c)
+    }
+
+    func flashLetter() {
+        scrollLetter = selectionLetter
+        letterTask?.cancel()
+        letterTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .milliseconds(650))
+            guard !Task.isCancelled else { return }
+            self?.scrollLetter = nil
         }
     }
 
@@ -55,7 +114,19 @@ final class Navigator {
     /// Rotates the selection (or scrubs on Now Playing). Returns whether anything moved.
     @discardableResult
     func wheel(delta: Int) -> Bool {
+        if screen == .nowPlaying, nowPlayingWheel == .volume {
+            guard VolumeControl.shared.change(by: Float(delta) / 32) else { return false }
+            showingVolume = true
+            volumeTask?.cancel()
+            volumeTask = Task { @MainActor [weak self] in
+                try? await Task.sleep(for: .milliseconds(1_500))
+                guard !Task.isCancelled else { return }
+                self?.showingVolume = false
+            }
+            return true
+        }
         if screen == .nowPlaying {
+            scheduleScrubIdle()
             guard player.current != nil else { return false }
             let duration = player.duration
             guard duration > 0 else { return false }
@@ -81,6 +152,32 @@ final class Navigator {
     func commitScrub() {
         if let t = scrubTarget { player.seek(to: t) }
         scrubTarget = nil
+        if nowPlayingWheel == .scrub { scheduleScrubIdle() }
+    }
+
+    /// Centre press on Now Playing: switch the wheel between volume and scrubbing.
+    private func toggleNowPlayingWheel() -> Bool {
+        guard player.current != nil else { return false }
+        showingVolume = false
+        nowPlayingWheel = nowPlayingWheel == .volume ? .scrub : .volume
+        if nowPlayingWheel == .scrub { scheduleScrubIdle() } else { scrubIdleTask?.cancel() }
+        return true
+    }
+
+    private func scheduleScrubIdle() {
+        scrubIdleTask?.cancel()
+        scrubIdleTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .seconds(4))
+            guard !Task.isCancelled, let self, self.scrubTarget == nil else { return }
+            self.nowPlayingWheel = .volume
+        }
+    }
+
+    private func leaveNowPlaying() {
+        scrubTarget = nil
+        scrubIdleTask?.cancel()
+        nowPlayingWheel = .volume
+        showingVolume = false
     }
 
     // MARK: Actions
@@ -90,7 +187,11 @@ final class Navigator {
     func select() -> Bool {
         let content = content(for: screen)
         if case .none = content {
-            return screen == .nowPlaying ? player.togglePlayPause() : false
+            switch screen {
+            case .nowPlaying: return toggleNowPlayingWheel()
+            case .game: game.press(); return true
+            default: return false
+            }
         }
         guard content.count > 0 else { return false }
         let sel = min(frame.selection, content.count - 1)
@@ -105,6 +206,7 @@ final class Navigator {
                 guard !library.allSongs.isEmpty else { return false }
                 player.shuffleAll(library.allSongs)
                 push(.nowPlaying)
+            case .extras: push(.extras)
             case .settings: push(.settings)
             case .nowPlaying:
                 guard player.current != nil else { return false }
@@ -122,6 +224,12 @@ final class Navigator {
             push(.nowPlaying)
         case .settings(let items):
             perform(items[sel])
+        case .extras(let items):
+            switch items[sel] {
+            case .safecracker:
+                game.newGame()
+                push(.game)
+            }
         case .none:
             return false
         }
@@ -137,14 +245,14 @@ final class Navigator {
 
     @discardableResult
     func back() -> Bool {
-        scrubTarget = nil
+        leaveNowPlaying()
         guard stack.count > 1 else { return false }
         stack.removeLast()
         return true
     }
 
     func goHome() {
-        scrubTarget = nil
+        leaveNowPlaying()
         stack = [stack[0]]
     }
 
@@ -155,6 +263,7 @@ final class Navigator {
         case .shuffle: player.shuffle ? "ON" : "OFF"
         case .repeatAll: player.repeatAll ? "ALL" : "OFF"
         case .equalizer: player.eqPreset.label
+        case .finish: finish.label
         case .syncFolder:
             if library.isSyncing { "SYNCING" }
             else if let name = library.syncFolderName {
@@ -176,6 +285,7 @@ final class Navigator {
 
     private func push(_ s: Screen) {
         if s == .nowPlaying, screen == .nowPlaying { return }
+        leaveNowPlaying()
         stack.append(NavFrame(screen: s))
     }
 
@@ -186,6 +296,9 @@ final class Navigator {
         case .shuffle: player.toggleShuffle()
         case .repeatAll: player.toggleRepeat()
         case .equalizer: player.cycleEQ()
+        case .finish:
+            finish = finish.next
+            UserDefaults.standard.set(finish.rawValue, forKey: "bodyFinish")
         case .syncFolder: importerMode = .syncFolder; showImporter = true
         case .importMusic: importStatus = nil; importerMode = .music; showImporter = true
         case .rescan: Task { await library.refresh() }

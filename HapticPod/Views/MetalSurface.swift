@@ -49,21 +49,25 @@ enum MetalTexture {
 }
 
 struct MetalSurface: View {
+    @Environment(Navigator.self) private var nav
+
     var body: some View {
+        let finish = nav.finish
+        let tone = finish.body
         ZStack {
-            LinearGradient(stops: [.init(color: Theme.bodyTop, location: 0),
-                                   .init(color: Theme.bodyMid, location: 0.5),
-                                   .init(color: Theme.bodyBottom, location: 1)],
+            LinearGradient(stops: [.init(color: tone.top, location: 0),
+                                   .init(color: tone.mid, location: 0.5),
+                                   .init(color: tone.bottom, location: 1)],
                            startPoint: .top, endPoint: .bottom)
 
             Image(uiImage: MetalTexture.image)
                 .resizable(resizingMode: .tile)
                 .blendMode(.overlay)
-                .opacity(0.75)
+                .opacity(finish.grain)
 
             // Soft diagonal sheen, like light catching anodised aluminium.
             LinearGradient(stops: [.init(color: .white.opacity(0), location: 0.15),
-                                   .init(color: .white.opacity(0.45), location: 0.42),
+                                   .init(color: .white.opacity(finish.sheen), location: 0.42),
                                    .init(color: .white.opacity(0), location: 0.7)],
                            startPoint: UnitPoint(x: 0, y: 0), endPoint: UnitPoint(x: 1, y: 1))
                 .blendMode(.softLight)

@@ -8,6 +8,7 @@ enum Screen: Hashable {
     case songs
     case settings
     case nowPlaying
+    case extras, game
 }
 
 struct NavFrame: Equatable {
@@ -17,7 +18,7 @@ struct NavFrame: Equatable {
 }
 
 enum MenuItem: CaseIterable {
-    case playlists, artists, albums, songs, shuffleSongs, settings, nowPlaying
+    case playlists, artists, albums, songs, shuffleSongs, extras, settings, nowPlaying
 
     var title: String {
         switch self {
@@ -26,6 +27,7 @@ enum MenuItem: CaseIterable {
         case .albums: "ALBUMS"
         case .songs: "SONGS"
         case .shuffleSongs: "SHUFFLE SONGS"
+        case .extras: "EXTRAS"
         case .settings: "SETTINGS"
         case .nowPlaying: "NOW PLAYING"
         }
@@ -33,7 +35,7 @@ enum MenuItem: CaseIterable {
 }
 
 enum SettingItem: CaseIterable {
-    case haptics, clickSound, shuffle, repeatAll, equalizer, syncFolder, importMusic, rescan, about
+    case haptics, clickSound, shuffle, repeatAll, equalizer, finish, syncFolder, importMusic, rescan, about
 
     var title: String {
         switch self {
@@ -42,10 +44,21 @@ enum SettingItem: CaseIterable {
         case .shuffle: "SHUFFLE"
         case .repeatAll: "REPEAT"
         case .equalizer: "EQUALIZER"
+        case .finish: "BODY"
         case .syncFolder: "SYNC FOLDER"
         case .importMusic: "IMPORT MUSIC"
         case .rescan: "SYNC & RESCAN"
         case .about: "ABOUT"
+        }
+    }
+}
+
+enum ExtraItem: CaseIterable {
+    case safecracker
+
+    var title: String {
+        switch self {
+        case .safecracker: "SAFECRACKER"
         }
     }
 }
@@ -66,6 +79,7 @@ enum ListContent {
     case groups([GroupInfo])
     case tracks([Track])
     case settings([SettingItem])
+    case extras([ExtraItem])
     case none
 
     var count: Int {
@@ -74,6 +88,7 @@ enum ListContent {
         case .groups(let g): g.count
         case .tracks(let t): t.count
         case .settings(let s): s.count
+        case .extras(let e): e.count
         case .none: 0
         }
     }
