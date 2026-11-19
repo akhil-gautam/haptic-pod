@@ -145,7 +145,8 @@ struct WheelView: View {
                 if nav.isAlphabetical, t.model.isFast { nav.flashLetter() }
             } else if !t.atBoundary {
                 t.atBoundary = true
-                haptics.play(.thud)
+                // Setting a sound's level: a firm stop at 100% rather than the list-end thud.
+                haptics.play(nav.adjustingSound != nil ? .home : .thud)
             }
         }
     }
@@ -176,7 +177,12 @@ struct WheelView: View {
             player.next()
         case .bottom:
             haptics.play(.click)
-            player.togglePlayPause()
+            // On SOUNDS (or with no song loaded) play/pause runs the sound mix.
+            if nav.screen == .sounds || player.current == nil {
+                nav.mixer.togglePlay()
+            } else {
+                player.togglePlayPause()
+            }
         }
     }
 

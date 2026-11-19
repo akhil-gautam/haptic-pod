@@ -15,7 +15,13 @@ targets:
   HapticPod:
     type: application
     platform: iOS
-    sources: [HapticPod]
+    sources:
+      - path: HapticPod
+        excludes: ["Resources/Sounds/**"]
+      # Bundled as a folder so files land in Sounds/ inside the app.
+      - path: HapticPod/Resources/Sounds
+        type: folder
+        buildPhase: resources
     settings:
       base:
         DEVELOPMENT_TEAM: NCLSWS8Y8K

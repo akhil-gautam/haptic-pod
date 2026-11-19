@@ -22,6 +22,7 @@ It plays music you own: local files you import from the Files app (Google Drive,
 - **Gapless playback** on an `AVAudioEngine` graph.
 - **Ten sound modes**: Flat, Stereo, Surround, Cinema, Concert, Club, Bass, Vocal, Treble and Loud. Each mode is a 5-band EQ curve; some also add room reverb and a short ambience delay.
 - **Resume**: reopens on the same track and position.
+- **Sounds**: 24 built-in sounds for relaxing, meditating and sleeping. Layer up to six of them over your music, set each one's level with the wheel, and set a sleep timer that fades everything out. See [Sounds](#sounds).
 - Background audio, lock-screen and Control Center controls.
 - Click sounds mix in with other apps' audio instead of stopping it.
 
@@ -41,7 +42,29 @@ Requirements: Xcode 16 or later (developed with Xcode 27), [XcodeGen](https://gi
 
 3. In the app, open **Settings › SYNC FOLDER** or **IMPORT MUSIC** and pick your music.
 
-Debug builds accept `-screen songs|playlists|artists|albums|settings|nowPlaying` as a launch argument to open straight to that screen.
+Debug builds accept `-screen songs|playlists|artists|albums|settings|nowPlaying|sounds` as a launch argument to open straight to that screen.
+
+## Sounds
+
+**SOUNDS** on the home menu is an ambient mixer:
+
+- **Recordings:** rain, thunder, ocean, stream, waterfall, forest birds, wind, crickets, frogs,
+  campfire, singing bowl, temple gong, wind chimes, a water fountain and an airplane cabin.
+- **Generated in code:** white, pink and brown noise, a deep drone, and theta binaural beats.
+
+How to use it:
+
+- Press the centre on a sound to add it.
+- Press again to set its level with the wheel. Turning it down to zero removes it.
+- **SLEEP TIMER** cycles 15–90 minutes and fades out both the sounds and the music.
+
+Every recording is public domain (CC0) from [Freesound](https://freesound.org). Each file's author
+and source are in [`HapticPod/Resources/Sounds/CREDITS.md`](HapticPod/Resources/Sounds/CREDITS.md).
+`scripts/prepare_sounds.py` rebuilds the files from the list in `scripts/sounds.tsv`:
+
+- it trims each recording to its steadiest stretch,
+- crossfades the ends into a seamless loop,
+- and matches loudness to about −24 LUFS.
 
 ## Layout
 
@@ -53,6 +76,8 @@ HapticPod/
   Models/      tracks, screens and menu items
   Navigation/  wheel-driven navigation stack
   Playback/    AVAudioEngine player, sound modes, Now Playing bridge
+  Sounds/      ambient mixer engine, sound catalogue, noise generators, sleep timer
+  Resources/   bundled CC0 sound loops and their credits
   Views/       device body, display, lists, Now Playing and the wheel
 ```
 

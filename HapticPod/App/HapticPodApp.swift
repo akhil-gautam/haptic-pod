@@ -9,10 +9,20 @@ final class AppServices {
     let haptics = Haptics()
     let library = LibraryStore()
     let player = PlayerService()
+    let mixer = SoundMixer()
+    let sleepTimer: SleepTimer
     let nav: Navigator
 
     private init() {
-        nav = Navigator(library: library, player: player, haptics: haptics)
+        sleepTimer = SleepTimer(player: player, mixer: mixer)
+        mixer.player = player
+        player.mixer = mixer
+        mixer.onStateChange = { [weak player] in player?.refreshNowPlaying() }
+        nav = Navigator(library: library, player: player, haptics: haptics, mixer: mixer, sleepTimer: sleepTimer)
+        #if DEBUG
+        // `-autoplayMix YES` starts the saved (or `-soundMix`) mix on launch, for checks on device.
+        if UserDefaults.standard.bool(forKey: "autoplayMix") { mixer.play() }
+        #endif
         library.load()
         player.onPlayCounted = { [weak library] id in library?.recordPlay(id) }
         player.restoreState(library: library.tracks)

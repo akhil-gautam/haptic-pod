@@ -9,6 +9,7 @@ enum Screen: Hashable {
     case settings
     case nowPlaying
     case extras, game
+    case sounds
 }
 
 struct NavFrame: Equatable {
@@ -18,7 +19,7 @@ struct NavFrame: Equatable {
 }
 
 enum MenuItem: CaseIterable {
-    case playlists, artists, albums, songs, shuffleSongs, extras, settings, nowPlaying
+    case playlists, artists, albums, songs, shuffleSongs, sounds, extras, settings, nowPlaying
 
     var title: String {
         switch self {
@@ -27,6 +28,7 @@ enum MenuItem: CaseIterable {
         case .albums: "ALBUMS"
         case .songs: "SONGS"
         case .shuffleSongs: "SHUFFLE SONGS"
+        case .sounds: "SOUNDS"
         case .extras: "EXTRAS"
         case .settings: "SETTINGS"
         case .nowPlaying: "NOW PLAYING"
@@ -80,6 +82,7 @@ enum ListContent {
     case tracks([Track])
     case settings([SettingItem])
     case extras([ExtraItem])
+    case sounds([SoundsRow])
     case none
 
     var count: Int {
@@ -89,7 +92,16 @@ enum ListContent {
         case .tracks(let t): t.count
         case .settings(let s): s.count
         case .extras(let e): e.count
+        case .sounds(let r): r.count
         case .none: 0
         }
     }
+}
+
+/// Rows of the SOUNDS screen: three controls, then every built-in sound.
+enum SoundsRow: Hashable {
+    case playPause, sleepTimer, clear
+    case sound(AmbientSound)
+
+    static let all: [SoundsRow] = [.playPause, .sleepTimer, .clear] + AmbientSound.all.map { .sound($0) }
 }

@@ -55,6 +55,7 @@ struct DisplayView: View {
         case .playlists, .artists, .albums, .songs: ListScreenView(frame: frame)
         case .extras: ExtrasView(frame: frame)
         case .game: SafeGameView()
+        case .sounds: SoundsView(frame: frame)
         }
     }
 }

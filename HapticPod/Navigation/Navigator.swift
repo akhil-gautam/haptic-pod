@@ -27,14 +27,25 @@ final class Navigator {
     private(set) var finish: BodyFinish
     let game: SafeGame
 
+    /// SOUNDS: the sound whose level the wheel is setting, if any.
+    private(set) var adjustingSound: String?
+    /// SOUNDS: a brief note on one row ("MAX 6").
+    private(set) var soundNotice: (id: String, text: String)?
+    @ObservationIgnored private var adjustIdleTask: Task<Void, Never>?
+    @ObservationIgnored private var noticeTask: Task<Void, Never>?
+    let mixer: SoundMixer
+    let sleepTimer: SleepTimer
+
     let library: LibraryStore
     let player: PlayerService
     let haptics: Haptics
 
-    init(library: LibraryStore, player: PlayerService, haptics: Haptics) {
+    init(library: LibraryStore, player: PlayerService, haptics: Haptics, mixer: SoundMixer, sleepTimer: SleepTimer) {
         self.library = library
         self.player = player
         self.haptics = haptics
+        self.mixer = mixer
+        self.sleepTimer = sleepTimer
         finish = BodyFinish(rawValue: UserDefaults.standard.integer(forKey: "bodyFinish")) ?? .silver
         game = SafeGame(haptics: haptics)
         #if DEBUG
@@ -42,7 +53,7 @@ final class Navigator {
         if let s = UserDefaults.standard.string(forKey: "screen") {
             let map: [String: Screen] = ["songs": .songs, "playlists": .playlists, "artists": .artists,
                                          "albums": .albums, "settings": .settings, "nowPlaying": .nowPlaying,
-                                         "extras": .extras, "game": .game]
+                                         "extras": .extras, "game": .game, "sounds": .sounds]
             if let screen = map[s] {
                 stack.append(NavFrame(screen: screen))
                 if screen == .game { game.newGame() }
@@ -67,6 +78,7 @@ final class Navigator {
         case .album(let n): .tracks(library.albumTracks(n))
         case .settings: .settings(SettingItem.allCases)
         case .extras: .extras(ExtraItem.allCases)
+        case .sounds: .sounds(SoundsRow.all)
         case .nowPlaying, .game: .none
         }
     }
@@ -114,6 +126,9 @@ final class Navigator {
     /// Rotates the selection (or scrubs on Now Playing). Returns whether anything moved.
     @discardableResult
     func wheel(delta: Int) -> Bool {
+        if screen == .sounds, let id = adjustingSound {
+            return adjustLevel(id, by: delta)
+        }
         if screen == .nowPlaying, nowPlayingWheel == .volume {
             guard VolumeControl.shared.change(by: Float(delta) / 32) else { return false }
             showingVolume = true
@@ -206,6 +221,7 @@ final class Navigator {
                 guard !library.allSongs.isEmpty else { return false }
                 player.shuffleAll(library.allSongs)
                 push(.nowPlaying)
+            case .sounds: push(.sounds)
             case .extras: push(.extras)
             case .settings: push(.settings)
             case .nowPlaying:
@@ -230,6 +246,8 @@ final class Navigator {
                 game.newGame()
                 push(.game)
             }
+        case .sounds(let rows):
+            return selectSoundsRow(rows[sel])
         case .none:
             return false
         }
@@ -245,6 +263,10 @@ final class Navigator {
 
     @discardableResult
     func back() -> Bool {
+        if adjustingSound != nil {
+            endAdjust()
+            return true
+        }
         leaveNowPlaying()
         guard stack.count > 1 else { return false }
         stack.removeLast()
@@ -252,6 +274,7 @@ final class Navigator {
     }
 
     func goHome() {
+        endAdjust()
         leaveNowPlaying()
         stack = [stack[0]]
     }
@@ -285,6 +308,7 @@ final class Navigator {
 
     private func push(_ s: Screen) {
         if s == .nowPlaying, screen == .nowPlaying { return }
+        endAdjust()
         leaveNowPlaying()
         stack.append(NavFrame(screen: s))
     }
@@ -303,6 +327,86 @@ final class Navigator {
         case .importMusic: importStatus = nil; importerMode = .music; showImporter = true
         case .rescan: Task { await library.refresh() }
         case .about: break
+        }
+    }
+
+    // MARK: Sounds
+
+    /// Group of the selected sound (for the SOUNDS header), nil on the control rows.
+    var selectedSoundGroup: String? {
+        guard screen == .sounds, SoundsRow.all.indices.contains(frame.selection),
+              case .sound(let sound) = SoundsRow.all[frame.selection] else { return nil }
+        return sound.group
+    }
+
+    func soundsValue(_ row: SoundsRow) -> String {
+        switch row {
+        case .playPause: mixer.levels.isEmpty ? "EMPTY" : "\(mixer.levels.count) ON"
+        case .sleepTimer: sleepTimer.label
+        case .clear: ""
+        case .sound: ""
+        }
+    }
+
+    private func selectSoundsRow(_ row: SoundsRow) -> Bool {
+        switch row {
+        case .playPause:
+            guard !mixer.levels.isEmpty else { return false }
+            mixer.togglePlay()
+        case .sleepTimer:
+            sleepTimer.cycle()
+        case .clear:
+            guard !mixer.levels.isEmpty else { return false }
+            endAdjust()
+            mixer.clear()
+        case .sound(let sound):
+            if adjustingSound == sound.id {
+                endAdjust()
+            } else if mixer.levels[sound.id] != nil {
+                adjustingSound = sound.id
+                scheduleAdjustIdle()
+            } else if mixer.turnOn(sound.id) {
+                endAdjust()
+            } else {
+                flashNotice(sound.id, "MAX \(SoundMixer.maxActive)")
+                return false
+            }
+        }
+        return true
+    }
+
+    /// Wheel while adjusting: one detent is 1/32. Reaching zero takes the sound out of the mix.
+    private func adjustLevel(_ id: String, by delta: Int) -> Bool {
+        scheduleAdjustIdle()
+        guard let level = mixer.levels[id] else { endAdjust(); return false }
+        let next = min(max(level + Float(delta) / 32, 0), 1)
+        guard abs(next - level) > 0.0001 else { return false }
+        mixer.setLevel(id, next)
+        if mixer.levels[id] == nil { endAdjust() }
+        return true
+    }
+
+    private func endAdjust() {
+        adjustIdleTask?.cancel()
+        adjustingSound = nil
+    }
+
+    private func scheduleAdjustIdle() {
+        adjustIdleTask?.cancel()
+        adjustIdleTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .seconds(4))
+            guard !Task.isCancelled else { return }
+            self?.adjustingSound = nil
+        }
+    }
+
+    private func flashNotice(_ id: String, _ text: String) {
+        soundNotice = (id, text)
+        noticeTask?.cancel()
+        noticeTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .milliseconds(1_200))
+            guard !Task.isCancelled else { return }
+            self?.soundNotice = nil
         }
     }
 }

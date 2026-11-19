@@ -35,6 +35,15 @@ enum NowPlayingBridge {
         }
     }
 
+    /// Next/previous/seek only make sense for music; the sound mix has no tracks.
+    static func setTrackCommandsEnabled(_ enabled: Bool) {
+        let center = MPRemoteCommandCenter.shared()
+        guard center.nextTrackCommand.isEnabled != enabled else { return }
+        center.nextTrackCommand.isEnabled = enabled
+        center.previousTrackCommand.isEnabled = enabled
+        center.changePlaybackPositionCommand.isEnabled = enabled
+    }
+
     static func update(_ info: [String: Any]?) {
         MPNowPlayingInfoCenter.default().nowPlayingInfo = info
     }

@@ -28,6 +28,16 @@ final class PlayerService {
     /// Called once per listen (30 s or half the track, whichever comes first).
     @ObservationIgnored var onPlayCounted: ((String) -> Void)?
 
+    /// Who the lock-screen controls belong to: whichever of music and the sound mix was started or
+    /// resumed most recently. Pausing doesn't change it, so Play resumes what was just paused.
+    enum Owner { case music, mix }
+    @ObservationIgnored var owner: Owner = .music {
+        didSet { pausedTogether = nil }
+    }
+    @ObservationIgnored weak var mixer: SoundMixer?
+    /// What a lock-screen Pause stopped, so the next Play brings back the same set.
+    @ObservationIgnored private var pausedTogether: (music: Bool, mix: Bool)?
+
     @ObservationIgnored private let engine = AVAudioEngine()
     @ObservationIgnored private let node = AVAudioPlayerNode()
     @ObservationIgnored private let eq = AVAudioUnitEQ(numberOfBands: EQPreset.frequencies.count)
@@ -125,6 +135,7 @@ final class PlayerService {
         guard startEngine() else { return }
         node.play()
         isPlaying = true
+        owner = .music
         updateNowPlaying()
     }
 
@@ -319,6 +330,7 @@ final class PlayerService {
                     if startEngine() { node.play() }
                 }
                 isPlaying = autoplay && engine.isRunning
+                if isPlaying { owner = .music }
                 updateNowPlaying()
                 saveState()
                 return
@@ -435,17 +447,76 @@ final class PlayerService {
     // MARK: System
 
     private func handle(_ action: RemoteAction) {
+        let mixPlaying = mixer?.isPlaying == true
         switch action {
-        case .play: resume()
-        case .pause: pause()
-        case .toggle: togglePlayPause()
+        case .play:
+            if let set = pausedTogether, set.music || set.mix {
+                pausedTogether = nil
+                if set.music { resume() }
+                if set.mix { mixer?.play() }
+            } else if showsMix, let mixer {
+                mixer.play()
+            } else {
+                resume()
+            }
+        case .pause:
+            let set = (music: isPlaying, mix: mixPlaying)
+            if set.music { pause() }
+            if set.mix { mixer?.pause() }
+            if set.music || set.mix { pausedTogether = set }
+        case .toggle:
+            handle(isPlaying || mixPlaying ? .pause : .play)
+        case .next where showsMix: break
         case .next: next()
+        case .previous where showsMix: break
         case .previous: previous()
+        case .seek where showsMix: break
         case .seek(let t): seek(to: t)
         }
     }
 
+    /// The lock screen shows whichever of music and the mix is audible; when both or neither are,
+    /// the owner (or the mix, if no song is loaded). An empty mix never shows.
+    private var showsMix: Bool {
+        guard let mixer, !mixer.levels.isEmpty else { return false }
+        if mixer.isPlaying != isPlaying { return mixer.isPlaying }
+        return owner == .mix || current == nil
+    }
+
+    func refreshNowPlaying() { updateNowPlaying() }
+
+    /// Fades the music out, pauses it, and restores the level for next time (sleep timer).
+    func fadeOut(over seconds: Double) async {
+        guard isPlaying else { return }
+        let mixer = engine.mainMixerNode
+        let steps = max(Int(seconds / 0.05), 1)
+        for i in 1...steps {
+            try? await Task.sleep(for: .milliseconds(50))
+            guard isPlaying, !Task.isCancelled else {
+                // Timer changed mid-fade: come back up smoothly rather than jumping to full.
+                for _ in 0..<10 where mixer.outputVolume < 1 {
+                    mixer.outputVolume = min(1, mixer.outputVolume + 0.1)
+                    try? await Task.sleep(for: .milliseconds(50))
+                }
+                mixer.outputVolume = 1
+                return
+            }
+            mixer.outputVolume = 1 - Float(i) / Float(steps)
+        }
+        pause()
+        mixer.outputVolume = 1
+    }
+
     private func updateNowPlaying() {
+        NowPlayingBridge.setTrackCommandsEnabled(!showsMix)
+        if showsMix, let mixer {
+            NowPlayingBridge.update([
+                MPMediaItemPropertyTitle: "Sounds",
+                MPMediaItemPropertyArtist: mixer.activeTitles.map(\.capitalized).joined(separator: " · "),
+                MPNowPlayingInfoPropertyPlaybackRate: mixer.isPlaying ? 1.0 : 0.0,
+            ])
+            return
+        }
         guard let t = current else { NowPlayingBridge.update(nil); return }
         var info: [String: Any] = [
             MPMediaItemPropertyTitle: t.title,
