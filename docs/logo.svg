@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="160 160 704 704" role="img" aria-label="Haptic Pod">
+<g stroke="#000000" stroke-linecap="round" fill="none">
+  <line x1="565.1" y1="314.0" x2="576.2" y2="272.5" stroke-width="21.0"/>
+  <line x1="614.5" y1="334.5" x2="636.0" y2="297.2" stroke-width="21.0"/>
+  <line x1="657.0" y1="367.0" x2="687.4" y2="336.6" stroke-width="21.0"/>
+  <line x1="689.5" y1="409.5" x2="726.8" y2="388.0" stroke-width="21.0"/>
+  <line x1="710.0" y1="458.9" x2="751.5" y2="447.8" stroke-width="21.0"/>
+  <line x1="717.0" y1="512.0" x2="760.0" y2="512.0" stroke-width="21.0"/>
+  <line x1="710.0" y1="565.1" x2="751.5" y2="576.2" stroke-width="21.0"/>
+  <line x1="689.5" y1="614.5" x2="726.8" y2="636.0" stroke-width="21.0"/>
+  <line x1="657.0" y1="657.0" x2="687.4" y2="687.4" stroke-width="21.0"/>
+  <line x1="614.5" y1="689.5" x2="636.0" y2="726.8" stroke-width="21.0"/>
+  <line x1="565.1" y1="710.0" x2="576.2" y2="751.5" stroke-width="21.0"/>
+  <line x1="512.0" y1="717.0" x2="512.0" y2="760.0" stroke-width="21.0"/>
+  <line x1="458.9" y1="710.0" x2="447.8" y2="751.5" stroke-width="21.0"/>
+  <line x1="409.5" y1="689.5" x2="388.0" y2="726.8" stroke-width="21.0"/>
+  <line x1="367.0" y1="657.0" x2="336.6" y2="687.4" stroke-width="21.0"/>
+  <line x1="334.5" y1="614.5" x2="297.2" y2="636.0" stroke-width="21.0"/>
+  <line x1="314.0" y1="565.1" x2="272.5" y2="576.2" stroke-width="21.0"/>
+  <line x1="307.0" y1="512.0" x2="264.0" y2="512.0" stroke-width="21.0"/>
+  <line x1="314.0" y1="458.9" x2="272.5" y2="447.8" stroke-width="21.0"/>
+  <line x1="334.5" y1="409.5" x2="297.2" y2="388.0" stroke-width="21.0"/>
+  <line x1="367.0" y1="367.0" x2="336.6" y2="336.6" stroke-width="21.0"/>
+  <line x1="409.5" y1="334.5" x2="388.0" y2="297.2" stroke-width="21.0"/>
+  <line x1="458.9" y1="314.0" x2="447.8" y2="272.5" stroke-width="21.0"/>
+  <line x1="512.0" y1="362.0" x2="512.0" y2="187.0" stroke-width="34.0"/>
+</g>
+</svg>

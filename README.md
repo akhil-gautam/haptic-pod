@@ -1,3 +1,10 @@
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/logo-dark.svg" />
+    <img src="docs/logo.svg" width="96" alt="Haptic Pod logo: a ring of detent ticks with one long tick" />
+  </picture>
+</p>
+
 # Haptic Pod
 
 A native iOS music player built around a click wheel. The whole phone screen becomes the device: a black display on top and a scroll wheel below, with Core Haptics ticks and synthesized click sounds as you spin it.
@@ -78,6 +85,7 @@ HapticPod/
   Playback/    AVAudioEngine player, sound modes, Now Playing bridge
   Sounds/      ambient mixer engine, sound catalogue, noise generators, sleep timer
   Resources/   bundled CC0 sound loops and their credits
+  Assets.xcassets/  app icon (drawn by scripts/make_icon.swift)
   Views/       device body, display, lists, Now Playing and the wheel
 ```
 
